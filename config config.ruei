@@ -1,0 +1,224 @@
+= II1188nn
+
+------------------------------------------------------------------------
+= EExxtteennddeedd  bbyy::
+Base (from gem i18n-1.8.5)
+
+(from gem i18n-1.8.5)
+------------------------------------------------------------------------
+
+
+
+This module allows you to easily cache all responses from the backend -
+thus speeding up the I18n aspects of your application quite a bit.
+
+To enable caching you can simply include the Cache module to the Simple
+backend - or whatever other backend you are using:
+
+  I18n::Backend::Simple.send(:include, I18n::Backend::Cache)
+
+You will also need to set a cache store implementation that you want to
+use:
+
+  I18n.cache_store = ActiveSupport::Cache.lookup_store(:memory_store)
+
+You can use any cache implementation you want that provides the same API
+as ActiveSupport::Cache (only the methods #fetch and #write are being
+used).
+
+The cache_key implementation by default assumes you pass values that
+return a valid key from #hash (see
+http://www.ruby-doc.org/core/classes/Object.html#M000337). However, you
+can configure your own digest method via which responds to #hexdigest
+(see http://ruby-doc.org/stdlib/libdoc/digest/rdoc/index.html):
+
+  I18n.cache_key_digest = Digest::MD5.new
+
+If you use a lambda as a default value in your translation like this:
+
+  I18n.t(:"date.order", :default => lambda {[:month, :day, :year]})
+
+Then you will always have a cache miss, because each time this method is
+called the lambda will have a different hash value. If you know the
+result of the lambda is a constant as in the example above, then to
+cache this you can make the lambda a constant, like this:
+
+  DEFAULT_DATE_ORDER = lambda {[:month, :day, :year]}
+  ...
+  I18n.t(:"date.order", :default => DEFAULT_DATE_ORDER)
+
+If the lambda may result in different values for each call then consider
+also using the Memoize backend.
+
+
+The Cascade module adds the ability to do cascading lookups to backends
+that are compatible to the Simple backend.
+
+By cascading lookups we mean that for any key that can not be found the
+Cascade module strips one segment off the scope part of the key and then
+tries to look up the key in that scope.
+
+E.g. when a lookup for the key :"foo.bar.baz" does not yield a result
+then the segment :bar will be stripped off the scope part :"foo.bar" and
+the new scope :foo will be used to look up the key :baz. If that does
+not succeed then the remaining scope segment :foo will be omitted, too,
+and again the key :baz will be looked up (now with no scope).
+
+To enable a cascading lookup one passes the :cascade option:
+
+  I18n.t(:'foo.bar.baz', :cascade => true)
+
+This will return the first translation found for :"foo.bar.baz",
+:"foo.baz" or :baz in this order.
+
+The cascading lookup takes precedence over resolving any given defaults.
+I.e. defaults will kick in after the cascading lookups haven't
+succeeded.
+
+This behavior is useful for libraries like ActiveRecord validations
+where the library wants to give users a bunch of more or less
+fine-grained options of scopes for a particular key.
+
+Thanks to Clemens Kofler for the initial idea and implementation! See
+http://github.com/clemens/i18n-cascading-backend
+
+
+I18n locale fallbacks are useful when you want your application to use
+translations from other locales when translations for the current locale
+are missing. E.g. you might want to use :en translations when
+translations in your applications main locale :de are missing.
+
+To enable locale fallbacks you can simply include the Fallbacks module
+to the Simple backend - or whatever other backend you are using:
+
+  I18n::Backend::Simple.include(I18n::Backend::Fallbacks)
+
+
+
+The InterpolationCompiler module contains optimizations that can
+tremendously speed up the interpolation process on the Simple backend.
+
+It works by defining a pre-compiled method on stored translation Strings
+that already bring all the knowledge about contained interpolation
+variables etc. so that the actual recurring interpolation will be very
+fast.
+
+To enable pre-compiled interpolations you can simply include the
+InterpolationCompiler module to the Simple backend:
+
+  I18n::Backend::Simple.include(I18n::Backend::InterpolationCompiler)
+
+Note that InterpolationCompiler does not yield meaningful results and
+consequently should not be used with Ruby 1.9 (YARV) but improves
+performance everywhere else (jRuby, Rubinius).
+
+
+Memoize module simply memoizes the values returned by lookup using a
+flat hash and can tremendously speed up the lookup process in a backend.
+
+To enable it you can simply include the Memoize module to your backend:
+
+  I18n::Backend::Simple.include(I18n::Backend::Memoize)
+
+Notice that it's the responsibility of the backend to define whenever
+the cache should be cleaned.
+
+I18n translation metadata is useful when you want to access information
+about how a translation was looked up, pluralized or interpolated in
+your application.
+
+  msg = I18n.t(:message, :default => 'Hi!', :scope => :foo)
+  msg.translation_metadata
+  # => { :key => :message, :scope => :foo, :default => 'Hi!' }
+
+If a :count option was passed to #translate it will be set to the
+metadata. Likewise, if any interpolation variables were passed they will
+also be set.
+
+To enable translation metadata you can simply include the Metadata
+module into the Simple backend class - or whatever other backend you are
+using:
+
+  I18n::Backend::Simple.include(I18n::Backend::Metadata)
+
+I18n Pluralization are useful when you want your application to
+customize pluralization rules.
+
+To enable locale specific pluralizations you can simply include the
+Pluralization module to the Simple backend - or whatever other backend
+you are using.
+
+  I18n::Backend::Simple.include(I18n::Backend::Pluralization)
+
+You also need to make sure to provide pluralization algorithms to the
+backend, i.e. include them to your I18n.load_path accordingly.
+
+
+
+
+
+
+
+
+heavily based on Masao Mutoh's gettext String interpolation extension
+http://github.com/mutoh/gettext/blob/f6566738b981fe0952548c421042ad1e0cd
+fb31e/lib/gettext/core_ext/string.rb
+
+
+Locale Fallbacks
+
+Extends the I18n module to hold a fallbacks instance which is set to an
+instance of I18n::Locale::Fallbacks by default but can be swapped with a
+different implementation.
+
+Locale fallbacks will compute a number of fallback locales for a given
+locale. For example:
+
+<pre> I18n.fallbacks[:"es-MX"] # => [:"es-MX", :es, :en] </pre>
+
+Locale fallbacks always fall back to
+
+  * all parent locales of a given locale (e.g. :es for :"es-MX") first,
+  * the current default locales and all of their parents second
+
+The default locales are set to [I18n.default_locale] by default but can
+be set to something else.
+
+One can additionally add any number of additional fallback locales
+manually. These will be added before the default locales to the fallback
+chain. For example:
+
+  # using the default locale as default fallback locale
+
+  I18n.default_locale = :"en-US"
+  I18n.fallbacks = I18n::Locale::Fallbacks.new(:"de-AT" => :"de-DE")
+  I18n.fallbacks[:"de-AT"] # => [:"de-AT", :de, :"de-DE"]
+
+  # using a custom locale as default fallback locale
+
+  I18n.fallbacks = I18n::Locale::Fallbacks.new(:"en-GB", :"de-AT" => :de, :"de-CH" => :de)
+  I18n.fallbacks[:"de-AT"] # => [:"de-AT", :de, :"en-GB", :en]
+  I18n.fallbacks[:"de-CH"] # => [:"de-CH", :de, :"en-GB", :en]
+
+  # mapping fallbacks to an existing instance
+
+  # people speaking Catalan also speak Spanish as spoken in Spain
+  fallbacks = I18n.fallbacks
+  fallbacks.map(:ca => :"es-ES")
+  fallbacks[:ca] # => [:ca, :"es-ES", :es, :"en-US", :en]
+
+  # people speaking Arabian as spoken in Palestine also speak Hebrew as spoken in Israel
+  fallbacks.map(:"ar-PS" => :"he-IL")
+  fallbacks[:"ar-PS"] # => [:"ar-PS", :ar, :"he-IL", :he, :"en-US", :en]
+  fallbacks[:"ar-EG"] # => [:"ar-EG", :ar, :"en-US", :en]
+
+  # people speaking Sami as spoken in Finnland also speak Swedish and Finnish as spoken in Finnland
+  fallbacks.map(:sms => [:"se-FI", :"fi-FI"])
+  fallbacks[:sms] # => [:sms, :"se-FI", :se, :"fi-FI", :fi, :"en-US", :en]
+
+
+
+RFC 4646/47 compliant Locale tag implementation that parses locale tags
+to subtags such as language, script, region, variant etc.
+
+For more informatio
