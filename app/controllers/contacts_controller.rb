@@ -17,7 +17,7 @@ class ContactsController < ApplicationController
   def show
     ## render json: @contact.attributes.merge({ author: "Caio Agiani"})
     
-    render json: @contact.to_br
+    render json: @contact
   end
 
   # POST /contacts
