@@ -17,9 +17,8 @@ class ContactsController < ApplicationController
   def show
     ## render json: @contact.attributes.merge({ author: "Caio Agiani"})
     
-    render json: @contact, include: [:kind] 
+    render json: @contact, include:  [:kind, :phones, :address]
   end
-
   # POST /contacts
   def create
     @contact = Contact.new(contact_params)
